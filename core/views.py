@@ -1,6 +1,8 @@
 from django.contrib import messages
 from django.shortcuts import render, redirect
 from django.views.decorators.http import require_http_methods
+from django.core.validators import validate_email
+from django.core.exceptions import ValidationError
 from .models import TradeSignal, PaymentRequest
 
 
@@ -18,6 +20,10 @@ def request_subscription(request):
     email = request.POST.get('email','').strip()
     plan = request.POST.get('plan','signals')
     method = request.POST.get('method','usdt')
+    try:
+        validate_email(email)
+    except ValidationError:
+        email = ''
     if not full_name or not email or plan not in ['signals','pro'] or method not in ['usdt','gateway']:
         messages.error(request, 'Please complete all required fields correctly.')
         return redirect('/#pricing')
