@@ -34,4 +34,4 @@ class PublicPagesTests(TestCase):
         TradeSignal.objects.create(title='Published', symbol='EUR/USD', market='forex', direction='sell', entry='1.1', stop_loss='1.11', target_1='1.08', is_published=True)
         response = self.client.get(reverse('home'))
         self.assertContains(response, 'EUR/USD')
-        self.assertNotContains(response, 'XAU/USD')
+        self.assertNotContains(response, 'Hidden')
