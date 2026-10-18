@@ -38,3 +38,15 @@ class ProductionSecretKeySettingsTests(SimpleTestCase):
     def test_production_accepts_long_secret_key(self):
         result = self.run_settings_import("x" * 64)
         self.assertEqual(result.returncode, 0, result.stderr)
+
+
+class SecureCookieSettingsTests(SimpleTestCase):
+    def test_production_cookie_flags_are_secure(self):
+        from django.conf import settings
+
+        self.assertTrue(settings.SESSION_COOKIE_SECURE)
+        self.assertTrue(settings.CSRF_COOKIE_SECURE)
+        self.assertTrue(settings.SESSION_COOKIE_HTTPONLY)
+        self.assertEqual(settings.SESSION_COOKIE_SAMESITE, "Lax")
+        self.assertEqual(settings.CSRF_COOKIE_SAMESITE, "Lax")
+        self.assertEqual(settings.X_FRAME_OPTIONS, "DENY")
