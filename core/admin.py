@@ -368,7 +368,7 @@ class PaymentRequestAdmin(admin.ModelAdmin):
     list_filter = ('plan','method','status')
     search_fields = ('full_name','email','transaction_reference')
     readonly_fields = ('status', 'created_at')
-    actions = ('move_selected_to_review', 'reject_selected_payments')
+    actions = ('move_selected_to_review', 'mark_selected_as_paid_after_verification', 'reject_selected_payments')
 
     @admin.action(description='Move pending subscription payments to review')
     @transaction.atomic
@@ -382,6 +382,29 @@ class PaymentRequestAdmin(admin.ModelAdmin):
                                previous_status={'field': 'status', 'value': previous})
             changed += 1
         self.message_user(request, f'{changed} subscription payment(s) moved to review. No payment was marked as received.')
+
+    @admin.action(description='Mark reviewed payments as received (verified reference required)')
+    @transaction.atomic
+    def mark_selected_as_paid_after_verification(self, request, queryset):
+        changed = 0
+        eligible = queryset.select_for_update().filter(
+            status=PaymentRequest.Status.REVIEW
+        ).exclude(transaction_reference='')
+        for obj in eligible:
+            previous = obj.status
+            obj.status = PaymentRequest.Status.PAID
+            obj.save(update_fields=('status',))
+            record_admin_audit(
+                request, obj, 'subscription_payment_marked_received',
+                previous_status={'field': 'status', 'value': previous},
+            )
+            changed += 1
+        self.message_user(
+            request,
+            f'{changed} reviewed subscription payment(s) marked received. '
+            'This records an authorized manual verification; it does not move money.',
+            level=messages.WARNING,
+        )
 
     @admin.action(description='Reject pending or under-review subscription payments')
     @transaction.atomic
