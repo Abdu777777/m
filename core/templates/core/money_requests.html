@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>طلبات الإيداع والسحب | عرب أوبشن</title>
+  <style>
+    :root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#0b1220;color:#eef2ff;font-family:system-ui,sans-serif;line-height:1.7}
+    main{max-width:1000px;margin:32px auto;padding:16px}.panel{background:#121c2e;border:1px solid #28364d;border-radius:16px;padding:22px;margin-bottom:18px}
+    h1,h2{margin-top:0}label{display:block;margin:12px 0 5px}input,select,button{font:inherit;padding:10px;border-radius:8px;border:1px solid #40516b;width:100%;background:#0b1220;color:#eef2ff}
+    button{background:#167d6b;border:0;font-weight:700;cursor:pointer;margin-top:16px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+    .muted{color:#b5c1d6}.notice{border:1px solid #705b2b;background:#302814;padding:12px;border-radius:10px}.messages{padding:0;list-style:none}.messages li{padding:10px;background:#23344a;border-radius:8px;margin:8px 0}
+    table{width:100%;border-collapse:collapse}th,td{text-align:right;padding:10px;border-bottom:1px solid #334155} .table-wrap{overflow-x:auto}.status{white-space:nowrap}
+    a{color:#56e0bd}@media(max-width:600px){main{margin:8px auto;padding:10px}.panel{padding:14px}}
+  </style>
+</head>
+<body>
+<main>
+  <p><a href="{% url 'account_dashboard' %}">العودة إلى حسابي</a></p>
+  <h1>طلبات الإيداع والسحب</h1>
+  <div class="panel notice">هذه الصفحة ترسل طلبًا للمراجعة فقط. لا ترسل أموالًا قبل الحصول على تعليمات رسمية والتحقق منها، ولا تنفذ المنصة تحويلًا تلقائيًا.</div>
+  {% if messages %}
+    <ul class="messages">{% for message in messages %}<li>{{ message }}</li>{% endfor %}</ul>
+  {% endif %}
+  <section class="panel">
+    <h2>إنشاء طلب جديد</h2>
+    <form method="post">
+      {% csrf_token %}
+      <div class="grid">
+        <div>
+          <label for="kind">نوع الطلب</label>
+          <select id="kind" name="kind" required>
+            <option value="deposit">إيداع</option>
+            <option value="withdrawal">سحب</option>
+          </select>
+        </div>
+        <div>
+          <label for="payment_method_id">وسيلة الدفع</label>
+          <select id="payment_method_id" name="payment_method_id" required>
+            <option value="">اختر وسيلة دفع</option>
+            {% for method in payment_methods %}
+              <option value="{{ method.pk }}">{{ method.name }} — {{ method.currency }} ({{ method.minimum_amount }}–{{ method.maximum_amount }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="amount">المبلغ</label>
+          <input id="amount" name="amount" type="number" min="0.01" step="0.01" inputmode="decimal" required>
+        </div>
+      </div>
+      <button type="submit">إرسال الطلب للمراجعة</button>
+    </form>
+  </section>
+  <section class="panel">
+    <h2>طلباتي السابقة</h2>
+    {% if money_requests %}
+      <div class="table-wrap"><table>
+        <thead><tr><th>الرقم</th><th>النوع</th><th>المبلغ</th><th>الوسيلة</th><th>الحالة</th><th>تاريخ الطلب</th></tr></thead>
+        <tbody>
+        {% for item in money_requests %}
+          <tr>
+            <td>#{{ item.pk }}</td>
+            <td>{{ item.get_kind_display }}</td>
+            <td>{{ item.amount }} {{ item.currency }}</td>
+            <td>{{ item.payment_method.name }}</td>
+            <td class="status">{{ item.get_status_display }}</td>
+            <td>{{ item.created_at|date:"Y-m-d H:i" }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+    {% else %}
+      <p class="muted">لا توجد طلبات حتى الآن.</p>
+    {% endif %}
+  </section>
+  <p><a href="{% url 'home' %}">الصفحة الرئيسية</a></p>
+</main>
+</body>
+</html>
