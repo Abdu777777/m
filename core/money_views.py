@@ -27,10 +27,10 @@ def money_requests(request):
             return redirect("money_requests")
 
         kind = request.POST.get("kind", "").strip()
-        currency = request.POST.get("currency", "").strip().upper()
         method_id = request.POST.get("payment_method_id", "").strip()
         raw_amount = request.POST.get("amount", "").strip()
         method = methods.filter(pk=method_id).first() if method_id.isdigit() else None
+        currency = method.currency.strip().upper() if method else ""
 
         try:
             amount = Decimal(raw_amount)
@@ -48,8 +48,6 @@ def money_requests(request):
             errors.append("وسيلة الدفع لا تقبل الإيداعات.")
         elif kind == MoneyRequest.Kind.WITHDRAWAL and not method.accepts_withdrawals:
             errors.append("وسيلة الدفع لا تقبل السحب.")
-        if method and currency != method.currency.strip().upper():
-            errors.append("العملة لا تطابق عملة وسيلة الدفع.")
         if method and amount is not None and not (method.minimum_amount <= amount <= method.maximum_amount):
             errors.append(f"المبلغ يجب أن يكون بين {method.minimum_amount} و{method.maximum_amount} {method.currency}.")
 
