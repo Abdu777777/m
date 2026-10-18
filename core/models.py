@@ -69,8 +69,12 @@ class TradeSignal(models.Model):
     target_1 = models.DecimalField(max_digits=18, decimal_places=6)
     target_2 = models.DecimalField(max_digits=18, decimal_places=6, blank=True, null=True)
     analysis = models.TextField(blank=True)
+    timeframe = models.CharField(max_length=24, blank=True, help_text='Example: 5m, 15m, 1h, 4h')
+    confidence = models.PositiveSmallIntegerField(blank=True, null=True, help_text='Analyst confidence, 0-100; not a probability guarantee')
     source_name = models.CharField(max_length=120, blank=True)
-    source_timestamp = models.DateTimeField(blank=True, null=True)
+    source_url = models.URLField(blank=True)
+    source_timestamp = models.DateTimeField(blank=True, null=True, help_text='Timestamp of source market data')
+    review_status = models.CharField(max_length=12, choices=[('draft','Draft'),('pending','Pending review'),('approved','Approved'),('rejected','Rejected')], default='draft')
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.OPEN)
     result_r = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
     is_published = models.BooleanField(default=False)
@@ -79,6 +83,25 @@ class TradeSignal(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     class Meta:
         ordering = ['-published_at','-created_at']
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        errors = {}
+        if self.confidence is not None and not 0 <= self.confidence <= 100:
+            errors['confidence'] = 'Confidence must be between 0 and 100.'
+        if self.direction == self.Direction.BUY and self.stop_loss >= self.entry:
+            errors['stop_loss'] = 'For BUY signals, stop loss should be below entry.'
+        if self.direction == self.Direction.BUY and self.target_1 <= self.entry:
+            errors['target_1'] = 'For BUY signals, target 1 should be above entry.'
+        if self.direction == self.Direction.SELL and self.stop_loss <= self.entry:
+            errors['stop_loss'] = 'For SELL signals, stop loss should be above entry.'
+        if self.direction == self.Direction.SELL and self.target_1 >= self.entry:
+            errors['target_1'] = 'For SELL signals, target 1 should be below entry.'
+        if errors:
+            raise ValidationError(errors)
+    def save(self, *args, **kwargs):
+        if self.is_published and self.review_status != 'approved':
+            self.is_published = False
+        super().save(*args, **kwargs)
     def __str__(self):
         return f'{self.symbol} {self.direction.upper()} — {self.status}'
 
