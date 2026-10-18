@@ -1,6 +1,12 @@
-from django.contrib import admin
+from django import forms
+from django.contrib import admin, messages
+from django.core.exceptions import PermissionDenied
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import path, reverse
+from django.utils.html import format_html
 from django.db import transaction
 from django.utils import timezone
+from .finance import MoneyRequestWorkflowError, settle_money_request
 from .models import AccountProfile, AuditEvent, KYCSubmission, LedgerAccount, LedgerEntry, LedgerTransaction, MoneyRequest, PaymentMethod, PlatformSetting, TradeSignal, PaymentRequest
 
 
@@ -45,9 +51,22 @@ class AccountProfileAdmin(admin.ModelAdmin):
         record_admin_audit(request, obj, 'admin_update', form, previous_status)
 
 
+
+class SettlementEvidenceForm(forms.Form):
+    evidence_reference = forms.CharField(
+        max_length=180,
+        label='External transaction reference',
+        help_text='Enter the reference from the payment provider or transfer receipt.',
+    )
+    confirm_external_settlement = forms.BooleanField(
+        required=True,
+        label='I verified the external transfer independently.',
+    )
+
+
 @admin.register(MoneyRequest)
 class MoneyRequestAdmin(admin.ModelAdmin):
-    list_display = ('user', 'kind', 'amount', 'currency', 'payment_method', 'status', 'created_at', 'reviewed_by')
+    list_display = ('user', 'kind', 'amount', 'currency', 'payment_method', 'status', 'created_at', 'reviewed_by', 'settlement_link')
     list_filter = ('kind', 'status', 'currency', 'payment_method')
     search_fields = ('user__username', 'user__email', 'transaction_reference')
     readonly_fields = ('status', 'created_at', 'updated_at', 'reviewed_at', 'reviewed_by')
@@ -58,6 +77,61 @@ class MoneyRequestAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+    def get_urls(self):
+        custom_urls = [
+            path('<path:object_id>/settle/', self.admin_site.admin_view(self.settle_view), name='core_moneyrequest_settle'),
+        ]
+        return custom_urls + super().get_urls()
+
+    @admin.display(description='Manual settlement')
+    def settlement_link(self, obj):
+        if obj.kind == MoneyRequest.Kind.DEPOSIT and obj.status == MoneyRequest.Status.REVIEW:
+            label = 'Verify deposit'
+        elif obj.kind == MoneyRequest.Kind.WITHDRAWAL and obj.status == MoneyRequest.Status.APPROVED:
+            label = 'Record withdrawal'
+        else:
+            return '—'
+        url = reverse('admin:core_moneyrequest_settle', args=(obj.pk,))
+        return format_html('<a href="{}">{}</a>', url, label)
+
+    def settle_view(self, request, object_id):
+        obj = get_object_or_404(MoneyRequest, pk=object_id)
+        if not self.has_change_permission(request, obj):
+            raise PermissionDenied
+        if request.method == 'POST':
+            form = SettlementEvidenceForm(request.POST)
+            if form.is_valid():
+                try:
+                    settle_money_request(
+                        request_id=obj.pk,
+                        actor=request.user,
+                        evidence_reference=form.cleaned_data['evidence_reference'],
+                        confirm_received=(
+                            obj.kind == MoneyRequest.Kind.DEPOSIT
+                            and form.cleaned_data['confirm_external_settlement']
+                        ),
+                        confirm_sent=(
+                            obj.kind == MoneyRequest.Kind.WITHDRAWAL
+                            and form.cleaned_data['confirm_external_settlement']
+                        ),
+                    )
+                except MoneyRequestWorkflowError as exc:
+                    form.add_error(None, str(exc))
+                else:
+                    self.message_user(request, 'Settlement recorded in the internal ledger. No transfer was initiated by the platform.', messages.SUCCESS)
+                    return redirect(reverse('admin:core_moneyrequest_change', args=(obj.pk,)))
+        else:
+            form = SettlementEvidenceForm()
+        context = {
+            **self.admin_site.each_context(request),
+            'opts': self.model._meta,
+            'original': obj,
+            'title': 'Record verified external settlement',
+            'form': form,
+            'back_url': reverse('admin:core_moneyrequest_change', args=(obj.pk,)),
+        }
+        return render(request, 'admin/core/moneyrequest/settle.html', context)
 
     @admin.action(description='Move eligible requests to under review')
     @transaction.atomic
