@@ -90,7 +90,7 @@ class MoneyRequestAdminWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 302)
         request_obj.refresh_from_db()
         self.assertEqual(request_obj.status, MoneyRequest.Status.APPROVED)
-        account = LedgerEntry.objects.get(transaction__idempotency_key=f'money-request-{request_obj.pk}-deposit').account
+        account = LedgerEntry.objects.filter(transaction__idempotency_key=f'money-request-{request_obj.pk}-deposit', side='credit').get().account
         self.assertEqual(account_balance(account), request_obj.amount)
         self.assertTrue(AuditEvent.objects.filter(
             action='money_request_settled', object_id=str(request_obj.pk)
