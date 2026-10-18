@@ -4,9 +4,14 @@ import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
-SECRET_KEY = os.environ.get('SECRET_KEY', 'unsafe-development-key-change-me')
-if not DEBUG and SECRET_KEY == 'unsafe-development-key-change-me':
-    raise RuntimeError('Set a strong SECRET_KEY environment variable for production.')
+SECRET_KEY = os.environ.get('SECRET_KEY', '').strip()
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = 'unsafe-development-key-change-me'
+    else:
+        raise RuntimeError('Set a strong SECRET_KEY environment variable for production.')
+if not DEBUG and (SECRET_KEY == 'unsafe-development-key-change-me' or len(SECRET_KEY) < 50):
+    raise RuntimeError('Production SECRET_KEY must be a unique, randomly generated value of at least 50 characters.')
 
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if h.strip()]
 CSRF_TRUSTED_ORIGINS = [u.strip() for u in os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',') if u.strip()]
