@@ -8,9 +8,9 @@ from .models import validate_kyc_document
 class KYCDocumentValidationTests(SimpleTestCase):
     def test_accepts_supported_file_extensions_with_matching_signatures(self):
         samples = {
-            "identity.jpg": b"\\xff\\xd8\\xff\\xe0test",
-            "identity.jpeg": b"\\xff\\xd8\\xff\\xe0test",
-            "identity.png": b"\\x89PNG\\r\\n\\x1a\\ntest",
+            "identity.jpg": b"\xff\xd8\xff\xe0test",
+            "identity.jpeg": b"\xff\xd8\xff\xe0test",
+            "identity.png": b"\x89PNG\r\n\x1a\ntest",
             "identity.pdf": b"%PDF-1.7 test",
         }
         for filename, content in samples.items():
