@@ -1,0 +1,7 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>دخول | عرب أوبشن</title>
+<style>body{font-family:system-ui;background:#0b1220;color:#eef2ff;display:grid;place-items:center;min-height:100vh;margin:0}.panel{width:min(92%,420px);background:#121c2e;padding:28px;border:1px solid #28364d;border-radius:18px}label{display:block;margin:12px 0 6px}input{width:100%;box-sizing:border-box;padding:12px;border-radius:9px;border:1px solid #43516a;background:#0b1220;color:white}button,a.btn{display:block;width:100%;box-sizing:border-box;margin-top:18px;padding:12px;text-align:center;background:#56e0bd;color:#06111c;border:0;border-radius:9px;font-weight:700;text-decoration:none}a{color:#56e0bd}.errorlist{color:#ff9c9c}</style></head>
+<body><main class="panel"><h1>عرب أوبشن</h1><p>تسجيل الدخول إلى حسابك</p>
+<form method="post">{% csrf_token %}{{ form.non_field_errors }}{% for field in form %}<label for="{{field.id_for_label}}">{{field.label}}</label>{{field}} {{field.errors}}{% endfor %}<button type="submit">دخول</button></form>
+<p>ليس لديك حساب؟ <a href="{% url 'register' %}">إنشاء حساب</a></p><a href="/">العودة للرئيسية</a></main></body></html>
