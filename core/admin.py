@@ -357,12 +357,36 @@ class PaymentRequestAdmin(admin.ModelAdmin):
     list_display = ('full_name','email','plan','method','status','created_at')
     list_filter = ('plan','method','status')
     search_fields = ('full_name','email','transaction_reference')
-    list_editable = ('status',)
-    readonly_fields = ('created_at',)
-    def save_model(self, request, obj, form, change):
-        previous_status = get_previous_status(obj, change)
-        super().save_model(request, obj, form, change)
-        record_admin_audit(request, obj, 'subscription_payment_review', form, previous_status)
+    readonly_fields = ('status', 'created_at')
+    actions = ('move_selected_to_review', 'reject_selected_payments')
+
+    @admin.action(description='Move pending subscription payments to review')
+    @transaction.atomic
+    def move_selected_to_review(self, request, queryset):
+        changed = 0
+        for obj in queryset.select_for_update().filter(status=PaymentRequest.Status.PENDING):
+            previous = obj.status
+            obj.status = PaymentRequest.Status.REVIEW
+            obj.save(update_fields=('status',))
+            record_admin_audit(request, obj, 'subscription_payment_moved_to_review',
+                               previous_status={'field': 'status', 'value': previous})
+            changed += 1
+        self.message_user(request, f'{changed} subscription payment(s) moved to review. No payment was marked as received.')
+
+    @admin.action(description='Reject pending or under-review subscription payments')
+    @transaction.atomic
+    def reject_selected_payments(self, request, queryset):
+        changed = 0
+        for obj in queryset.select_for_update().filter(
+            status__in=(PaymentRequest.Status.PENDING, PaymentRequest.Status.REVIEW)
+        ):
+            previous = obj.status
+            obj.status = PaymentRequest.Status.REJECTED
+            obj.save(update_fields=('status',))
+            record_admin_audit(request, obj, 'subscription_payment_rejected',
+                               previous_status={'field': 'status', 'value': previous})
+            changed += 1
+        self.message_user(request, f'{changed} subscription payment(s) rejected.')
 
 
 @admin.register(KYCSubmission)
