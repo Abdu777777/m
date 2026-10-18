@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 from django.contrib.admin.sites import AdminSite
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 
@@ -18,7 +19,7 @@ class KYCAdminPermissionTests(TestCase):
             is_staff=True,
         )
         self.reviewer.user_permissions.add(
-            __import__("django").contrib.auth.models.Permission.objects.get(
+            Permission.objects.get(
                 content_type__app_label="core", codename="review_kycsubmission"
             )
         )
