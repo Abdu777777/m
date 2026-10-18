@@ -3,6 +3,27 @@ from django.utils import timezone
 from .models import AccountProfile, AuditEvent, KYCSubmission, LedgerAccount, LedgerEntry, LedgerTransaction, MoneyRequest, PaymentMethod, PlatformSetting, TradeSignal, PaymentRequest
 
 
+def record_admin_audit(request, obj, action, form=None, previous_status=None):
+    changed_fields = list(form.changed_data) if form is not None else []
+    details = {'changed_fields': changed_fields}
+    if previous_status is not None:
+        details['previous_status'] = previous_status
+        details['new_status'] = getattr(obj, 'status', None)
+    AuditEvent.objects.create(
+        actor=request.user,
+        action=action,
+        object_type=obj.__class__.__name__,
+        object_id=str(obj.pk or ''),
+        details=details,
+    )
+
+
+def get_previous_status(obj, change):
+    if change and obj.pk:
+        return obj.__class__.objects.filter(pk=obj.pk).values_list('status', flat=True).first()
+    return None
+
+
 @admin.register(AccountProfile)
 class AccountProfileAdmin(admin.ModelAdmin):
     list_display = ('user', 'status', 'can_login', 'can_trade', 'can_withdraw', 'kyc_required', 'updated_at')
@@ -11,8 +32,10 @@ class AccountProfileAdmin(admin.ModelAdmin):
     readonly_fields = ('created_at', 'updated_at', 'updated_by')
     fieldsets = (('Account', {'fields': ('user', 'status')}), ('Permissions', {'fields': ('can_login', 'can_trade', 'can_withdraw', 'kyc_required')}), ('Restriction details', {'fields': ('restriction_reason',)}), ('Audit', {'fields': ('created_at', 'updated_at', 'updated_by')}))
     def save_model(self, request, obj, form, change):
+        previous_status = get_previous_status(obj, change)
         obj.updated_by = request.user
         super().save_model(request, obj, form, change)
+        record_admin_audit(request, obj, 'admin_update', form, previous_status)
 
 
 @admin.register(MoneyRequest)
@@ -22,10 +45,12 @@ class MoneyRequestAdmin(admin.ModelAdmin):
     search_fields = ('user__username', 'user__email', 'transaction_reference')
     readonly_fields = ('created_at', 'updated_at', 'reviewed_at', 'reviewed_by')
     def save_model(self, request, obj, form, change):
+        previous_status = get_previous_status(obj, change)
         if obj.status != 'pending':
             obj.reviewed_by = request.user
             obj.reviewed_at = timezone.now()
         super().save_model(request, obj, form, change)
+        record_admin_audit(request, obj, 'money_request_review', form, previous_status)
 
 
 @admin.register(LedgerAccount)
@@ -73,6 +98,10 @@ class PaymentMethodAdmin(admin.ModelAdmin):
     list_filter = ('kind', 'currency', 'is_active')
     search_fields = ('name', 'network')
     readonly_fields = ('created_at', 'updated_at')
+    def save_model(self, request, obj, form, change):
+        previous_status = get_previous_status(obj, change)
+        super().save_model(request, obj, form, change)
+        record_admin_audit(request, obj, 'payment_method_update', form, previous_status)
 
 
 @admin.register(PlatformSetting)
@@ -98,6 +127,10 @@ class PaymentRequestAdmin(admin.ModelAdmin):
     search_fields = ('full_name','email','transaction_reference')
     list_editable = ('status',)
     readonly_fields = ('created_at',)
+    def save_model(self, request, obj, form, change):
+        previous_status = get_previous_status(obj, change)
+        super().save_model(request, obj, form, change)
+        record_admin_audit(request, obj, 'subscription_payment_review', form, previous_status)
 
 
 @admin.register(KYCSubmission)
@@ -118,8 +151,9 @@ class KYCSubmissionAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return False
     def save_model(self, request, obj, form, change):
+        previous_status = get_previous_status(obj, change)
         if obj.status in ('approved', 'rejected'):
             obj.reviewed_by = request.user
-            from django.utils import timezone
             obj.reviewed_at = timezone.now()
         super().save_model(request, obj, form, change)
+        record_admin_audit(request, obj, 'kyc_review', form, previous_status)
