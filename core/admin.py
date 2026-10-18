@@ -281,8 +281,75 @@ class TradeSignalAdmin(admin.ModelAdmin):
     list_display = ('symbol','market','direction','entry','stop_loss','target_1','status','review_status','result_r','is_published','published_at')
     list_filter = ('market','direction','status','review_status','is_published')
     search_fields = ('symbol','title','analysis','source_name')
-    list_editable = ('status','review_status','is_published')
-    readonly_fields = ('created_at','updated_at')
+    readonly_fields = ('review_status', 'is_published', 'published_at', 'created_at','updated_at')
+    actions = ('submit_signals_for_review', 'approve_reviewed_signals', 'reject_reviewed_signals', 'publish_approved_signals', 'unpublish_signals')
+
+    @admin.action(description='Submit draft signals for review')
+    def submit_signals_for_review(self, request, queryset):
+        changed = 0
+        for signal in queryset.filter(review_status='draft'):
+            previous = signal.review_status
+            signal.review_status = 'pending'
+            signal.is_published = False
+            signal.save(update_fields=('review_status', 'is_published', 'updated_at'))
+            record_admin_audit(request, signal, 'signal_submitted_for_review', previous_status={'field': 'review_status', 'value': previous})
+            changed += 1
+        self.message_user(request, f'{changed} signal(s) submitted for review.')
+
+    @admin.action(description='Approve signals pending review')
+    def approve_reviewed_signals(self, request, queryset):
+        changed = 0
+        for signal in queryset.filter(review_status='pending'):
+            previous = signal.review_status
+            signal.review_status = 'approved'
+            signal.is_published = False
+            signal.save(update_fields=('review_status', 'is_published', 'updated_at'))
+            record_admin_audit(request, signal, 'signal_review_approved', previous_status={'field': 'review_status', 'value': previous})
+            changed += 1
+        self.message_user(request, f'{changed} signal(s) approved. They remain unpublished until explicitly published.')
+
+    @admin.action(description='Reject signals pending review')
+    def reject_reviewed_signals(self, request, queryset):
+        changed = 0
+        for signal in queryset.filter(review_status='pending'):
+            previous = signal.review_status
+            signal.review_status = 'rejected'
+            signal.is_published = False
+            signal.save(update_fields=('review_status', 'is_published', 'updated_at'))
+            record_admin_audit(request, signal, 'signal_review_rejected', previous_status={'field': 'review_status', 'value': previous})
+            changed += 1
+        self.message_user(request, f'{changed} signal(s) rejected.')
+
+    @admin.action(description='Publish approved open signals')
+    def publish_approved_signals(self, request, queryset):
+        changed = 0
+        for signal in queryset.filter(review_status='approved', status=TradeSignal.Status.OPEN, is_published=False):
+            signal.is_published = True
+            signal.published_at = timezone.now()
+            signal.save(update_fields=('is_published', 'published_at', 'updated_at'))
+            record_admin_audit(request, signal, 'signal_published')
+            changed += 1
+        self.message_user(request, f'{changed} approved signal(s) published.')
+
+    @admin.action(description='Unpublish selected signals')
+    def unpublish_signals(self, request, queryset):
+        changed = 0
+        for signal in queryset.filter(is_published=True):
+            signal.is_published = False
+            signal.save(update_fields=('is_published', 'updated_at'))
+            record_admin_audit(request, signal, 'signal_unpublished')
+            changed += 1
+        self.message_user(request, f'{changed} signal(s) unpublished.')
+
+    def save_model(self, request, obj, form, change):
+        previous_status = get_previous_status(obj, change)
+        if change:
+            original = TradeSignal.objects.get(pk=obj.pk)
+            obj.review_status = original.review_status
+            obj.is_published = original.is_published
+            obj.published_at = original.published_at
+        super().save_model(request, obj, form, change)
+        record_admin_audit(request, obj, 'trade_signal_update', form, previous_status)
 
 
 @admin.register(PaymentRequest)
