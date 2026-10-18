@@ -107,8 +107,12 @@ class KYCSubmissionAdmin(admin.ModelAdmin):
     search_fields = ('user__username', 'user__email')
     readonly_fields = ('user', 'document_type', 'document_file', 'applicant_note', 'created_at', 'updated_at', 'reviewed_by', 'reviewed_at')
     fields = ('user', 'document_type', 'document_file', 'applicant_note', 'status', 'reviewer_note', 'created_at', 'updated_at', 'reviewed_by', 'reviewed_at')
-    def has_view_permission(self, request, obj=None):
+    def _can_review_kyc(self, request):
         return request.user.is_superuser or request.user.has_perm('core.review_kycsubmission')
+    def has_view_permission(self, request, obj=None):
+        return self._can_review_kyc(request)
+    def has_change_permission(self, request, obj=None):
+        return self._can_review_kyc(request)
     def has_add_permission(self, request):
         return False
     def has_delete_permission(self, request, obj=None):
