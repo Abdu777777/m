@@ -1,6 +1,11 @@
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase
+from django.contrib.admin.sites import AdminSite
+from types import SimpleNamespace
+
+from .admin import KYCSubmissionAdmin
+from .models import KYCSubmission
 
 from .models import validate_kyc_document
 
@@ -31,3 +36,29 @@ class KYCDocumentValidationTests(SimpleTestCase):
         upload = SimpleUploadedFile("identity.pdf", b"%PDF-" + b"x" * (5 * 1024 * 1024 + 1))
         with self.assertRaises(ValidationError):
             validate_kyc_document(upload)
+
+
+class KYCAdminPermissionTests(SimpleTestCase):
+    def setUp(self):
+        self.model_admin = KYCSubmissionAdmin(KYCSubmission, AdminSite())
+
+    def test_regular_staff_cannot_view_kyc_documents(self):
+        request = SimpleNamespace(user=SimpleNamespace(
+            is_superuser=False,
+            has_perm=lambda permission: False,
+        ))
+        self.assertFalse(self.model_admin.has_view_permission(request))
+
+    def test_reviewer_permission_allows_kyc_admin_access(self):
+        request = SimpleNamespace(user=SimpleNamespace(
+            is_superuser=False,
+            has_perm=lambda permission: permission == "core.review_kycsubmission",
+        ))
+        self.assertTrue(self.model_admin.has_view_permission(request))
+
+    def test_superuser_can_view_kyc_documents(self):
+        request = SimpleNamespace(user=SimpleNamespace(
+            is_superuser=True,
+            has_perm=lambda permission: False,
+        ))
+        self.assertTrue(self.model_admin.has_view_permission(request))
