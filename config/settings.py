@@ -41,7 +41,42 @@ STATIC_ROOT = BASE_DIR/'staticfiles'
 # User-uploaded identity documents must stay outside static/public directories.
 # In Railway, mount a persistent volume at /data and set MEDIA_ROOT=/data/private-media.
 MEDIA_ROOT = Path(os.environ.get('MEDIA_ROOT', str(BASE_DIR / 'private-media')))
-STORAGES = {'default': {'BACKEND':'django.core.files.storage.FileSystemStorage'}, 'staticfiles': {'BACKEND':'whitenoise.storage.CompressedManifestStaticFilesStorage'}}
+USE_S3_MEDIA = os.environ.get('USE_S3_MEDIA', 'False').lower() == 'true'
+if USE_S3_MEDIA:
+    required_s3_settings = {
+        'AWS_STORAGE_BUCKET_NAME': os.environ.get('AWS_STORAGE_BUCKET_NAME'),
+        'AWS_ACCESS_KEY_ID': os.environ.get('AWS_ACCESS_KEY_ID'),
+        'AWS_SECRET_ACCESS_KEY': os.environ.get('AWS_SECRET_ACCESS_KEY'),
+        'AWS_S3_ENDPOINT_URL': os.environ.get('AWS_S3_ENDPOINT_URL'),
+        'AWS_S3_REGION_NAME': os.environ.get('AWS_S3_REGION_NAME'),
+    }
+    missing_s3_settings = [name for name, value in required_s3_settings.items() if not value]
+    if missing_s3_settings:
+        raise RuntimeError('S3 media storage is enabled but required settings are missing: ' + ', '.join(missing_s3_settings))
+    STORAGES = {
+        'default': {
+            'BACKEND': 'storages.backends.s3.S3Storage',
+            'OPTIONS': {
+                'bucket_name': required_s3_settings['AWS_STORAGE_BUCKET_NAME'],
+                'access_key': required_s3_settings['AWS_ACCESS_KEY_ID'],
+                'secret_key': required_s3_settings['AWS_SECRET_ACCESS_KEY'],
+                'endpoint_url': required_s3_settings['AWS_S3_ENDPOINT_URL'],
+                'region_name': required_s3_settings['AWS_S3_REGION_NAME'],
+                'addressing_style': os.environ.get('AWS_S3_ADDRESSING_STYLE', 'path'),
+                'querystring_auth': True,
+                'querystring_expire': 300,
+                'default_acl': None,
+                'file_overwrite': False,
+                'signature_version': 's3v4',
+            },
+        },
+        'staticfiles': {'BACKEND':'whitenoise.storage.CompressedManifestStaticFilesStorage'},
+    }
+else:
+    STORAGES = {
+        'default': {'BACKEND':'django.core.files.storage.FileSystemStorage'},
+        'staticfiles': {'BACKEND':'whitenoise.storage.CompressedManifestStaticFilesStorage'},
+    }
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SESSION_COOKIE_SECURE = not DEBUG
