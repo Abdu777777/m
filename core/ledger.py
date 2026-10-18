@@ -1,7 +1,7 @@
 from decimal import Decimal
 from django.db import transaction
 from django.db.models import Sum, Q
-from .models import LedgerAccount, LedgerEntry, LedgerTransaction
+from .models import AuditEvent, LedgerAccount, LedgerEntry, LedgerTransaction
 
 
 class LedgerValidationError(ValueError):
@@ -15,15 +15,26 @@ def post_ledger_transaction(*, idempotency_key, description, entries, created_by
     entries: [{'account_id': int, 'side': 'debit'|'credit', 'amount': Decimal|str}]
     Existing idempotency keys are accepted only if their posted entries match.
     """
-    if not idempotency_key or len(idempotency_key) > 120:
+    if not isinstance(idempotency_key, str) or not idempotency_key.strip() or len(idempotency_key.strip()) > 120:
         raise LedgerValidationError('A valid idempotency key is required.')
+    idempotency_key = idempotency_key.strip()
+    if not isinstance(description, str) or not description.strip() or len(description.strip()) > 240:
+        raise LedgerValidationError('A transaction description of 1–240 characters is required.')
+    if not isinstance(entries, (list, tuple)):
+        raise LedgerValidationError('Entries must be a list or tuple.')
     normalized = []
     for item in entries:
+        if not isinstance(item, dict):
+            raise LedgerValidationError('Each entry must be a mapping.')
         side = item.get('side')
-        amount = Decimal(str(item.get('amount', '0')))
-        if side not in ('debit', 'credit') or amount <= 0 or amount.quantize(Decimal('0.01')) != amount:
+        try:
+            amount = Decimal(str(item.get('amount', '0')))
+            account_id = int(item['account_id'])
+        except (KeyError, TypeError, ValueError, ArithmeticError):
+            raise LedgerValidationError('Each entry must have a valid account ID and decimal amount.')
+        if not amount.is_finite() or side not in ('debit', 'credit') or amount <= 0 or amount.quantize(Decimal('0.01')) != amount:
             raise LedgerValidationError('Each entry must have a valid side and positive 2-decimal amount.')
-        normalized.append({'account_id': int(item['account_id']), 'side': side, 'amount': amount})
+        normalized.append({'account_id': account_id, 'side': side, 'amount': amount})
     if len(normalized) < 2:
         raise LedgerValidationError('At least two entries are required.')
     debit_total = sum((e['amount'] for e in normalized if e['side'] == 'debit'), Decimal('0'))
@@ -43,14 +54,29 @@ def post_ledger_transaction(*, idempotency_key, description, entries, created_by
     if existing:
         current = sorted((e.account_id, e.side, e.amount) for e in existing.entries.all())
         requested = sorted((e['account_id'], e['side'], e['amount']) for e in normalized)
-        if existing.description != description or current != requested:
+        if existing.status != LedgerTransaction.Status.POSTED:
+            raise LedgerValidationError('This idempotency key belongs to a transaction that is not posted.')
+        if existing.description != description.strip() or current != requested:
             raise LedgerValidationError('Idempotency key was already used for a different transaction.')
         return existing
-    record = LedgerTransaction.objects.create(idempotency_key=idempotency_key, description=description[:240], created_by=created_by)
+    record = LedgerTransaction.objects.create(idempotency_key=idempotency_key, description=description.strip(), created_by=created_by)
     LedgerEntry.objects.bulk_create([
         LedgerEntry(transaction=record, account_id=e['account_id'], side=e['side'], amount=e['amount'], currency=currency)
         for e in normalized
     ])
+    AuditEvent.objects.create(
+        actor=created_by,
+        action='ledger_transaction_posted',
+        object_type='LedgerTransaction',
+        object_id=str(record.pk),
+        details={
+            'idempotency_key': idempotency_key,
+            'currency': currency,
+            'entry_count': len(normalized),
+            'debit_total': str(debit_total),
+            'credit_total': str(credit_total),
+        },
+    )
     return record
 
 
