@@ -62,3 +62,18 @@ class KYCAdminPermissionTests(SimpleTestCase):
             has_perm=lambda permission: False,
         ))
         self.assertTrue(self.model_admin.has_view_permission(request))
+
+    def test_staff_with_change_permission_but_without_reviewer_permission_is_denied(self):
+        request = SimpleNamespace(user=SimpleNamespace(
+            is_superuser=False,
+            has_perm=lambda permission: permission == "core.change_kycsubmission",
+        ))
+        self.assertFalse(self.model_admin.has_view_permission(request))
+        self.assertFalse(self.model_admin.has_change_permission(request))
+
+    def test_reviewer_can_change_kyc_review_status(self):
+        request = SimpleNamespace(user=SimpleNamespace(
+            is_superuser=False,
+            has_perm=lambda permission: permission == "core.review_kycsubmission",
+        ))
+        self.assertTrue(self.model_admin.has_change_permission(request))
