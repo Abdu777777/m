@@ -234,9 +234,9 @@ def validate_kyc_document(value):
 
     extension = os.path.splitext(value.name)[1].lower()
     signatures = {
-        '.jpg': lambda header: header.startswith(b'\\xff\\xd8\\xff'),
-        '.jpeg': lambda header: header.startswith(b'\\xff\\xd8\\xff'),
-        '.png': lambda header: header.startswith(b'\\x89PNG\\r\\n\\x1a\\n'),
+        '.jpg': lambda header: header.startswith(b'\xff\xd8\xff'),
+        '.jpeg': lambda header: header.startswith(b'\xff\xd8\xff'),
+        '.png': lambda header: header.startswith(b'\x89PNG\r\n\x1a\n'),
         '.pdf': lambda header: header.startswith(b'%PDF-'),
     }
     if extension not in signatures:
