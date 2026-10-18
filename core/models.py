@@ -228,10 +228,26 @@ def validate_kyc_document(value):
     import os
     from django.conf import settings
     from django.core.exceptions import ValidationError
+
     if value.size > getattr(settings, 'KYC_MAX_UPLOAD_BYTES', 5 * 1024 * 1024):
         raise ValidationError('File exceeds the 5 MB limit.')
-    if os.path.splitext(value.name)[1].lower() not in {'.jpg', '.jpeg', '.png', '.pdf'}:
+
+    extension = os.path.splitext(value.name)[1].lower()
+    signatures = {
+        '.jpg': lambda header: header.startswith(b'\\xff\\xd8\\xff'),
+        '.jpeg': lambda header: header.startswith(b'\\xff\\xd8\\xff'),
+        '.png': lambda header: header.startswith(b'\\x89PNG\\r\\n\\x1a\\n'),
+        '.pdf': lambda header: header.startswith(b'%PDF-'),
+    }
+    if extension not in signatures:
         raise ValidationError('Only JPG, PNG and PDF files are accepted.')
+
+    # Check the file signature as well as the extension. This is a basic
+    # consistency check, not a malware scan or full file parser.
+    header = value.read(8)
+    value.seek(0)
+    if not signatures[extension](header):
+        raise ValidationError('File content does not match its extension.')
 
 
 def kyc_private_upload_path(instance, filename):
