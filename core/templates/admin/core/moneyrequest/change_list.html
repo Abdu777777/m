@@ -1,0 +1,42 @@
+{% extends "admin/change_list.html" %}
+{% load i18n %}
+{% block content %}
+<div class="module" style="margin-bottom:16px;padding:14px;">
+  <h2>ملخص الطلبات المالية</h2>
+  <p>هذه الأرقام تلخص طلبات الإيداع والسحب المسجلة. إجمالي الطلبات ليس رصيدًا نقديًا ولا يؤكد استلام أو إرسال الأموال.</p>
+  <h3>حسب الحالة</h3>
+  <table>
+    <thead><tr><th>الحالة</th><th>عدد الطلبات</th></tr></thead>
+    <tbody>
+    {% for item in money_request_status_summary %}
+      <tr><td>{{ item.status }}</td><td>{{ item.count }}</td></tr>
+    {% empty %}
+      <tr><td colspan="2">لا توجد طلبات.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <h3>حسب النوع</h3>
+  <table>
+    <thead><tr><th>النوع</th><th>عدد الطلبات</th></tr></thead>
+    <tbody>
+    {% for item in money_request_kind_summary %}
+      <tr><td>{{ item.kind }}</td><td>{{ item.count }}</td></tr>
+    {% empty %}
+      <tr><td colspan="2">لا توجد طلبات.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <h3>إجمالي المبالغ بحسب العملة</h3>
+  <table>
+    <thead><tr><th>العملة</th><th>عدد الطلبات</th><th>مجموع المبالغ</th></tr></thead>
+    <tbody>
+    {% for item in money_request_currency_totals %}
+      <tr><td>{{ item.currency }}</td><td>{{ item.request_count }}</td><td>{{ item.total_amount|floatformat:2 }}</td></tr>
+    {% empty %}
+      <tr><td colspan="3">لا توجد طلبات.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{{ block.super }}
+{% endblock %}
