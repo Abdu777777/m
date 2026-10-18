@@ -21,3 +21,11 @@ jobs:
       - run: python manage.py makemigrations --check --dry-run
       - run: python manage.py migrate --noinput
       - run: python manage.py test
+      # Exercise Django's production security checks with non-production CI values.
+      - name: Check production security settings
+        env:
+          DEBUG: "False"
+          SECRET_KEY: "ci-deploy-check-9f2c7a4d6e8b1f3a5c7d9e2b4a6c8f0d1e3b5a7c9d2f4e6b8a0c2d4f6e8b1a3"
+          ALLOWED_HOSTS: "localhost,127.0.0.1"
+          CSRF_TRUSTED_ORIGINS: "https://example.invalid"
+        run: python manage.py check --deploy
