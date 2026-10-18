@@ -7,8 +7,9 @@ def record_admin_audit(request, obj, action, form=None, previous_status=None):
     changed_fields = list(form.changed_data) if form is not None else []
     details = {'changed_fields': changed_fields}
     if previous_status is not None:
-        details['previous_status'] = previous_status
-        details['new_status'] = getattr(obj, 'status', None)
+        state_field = previous_status['field']
+        details['previous_state'] = previous_status['value']
+        details['new_state'] = getattr(obj, state_field, None)
     AuditEvent.objects.create(
         actor=request.user,
         action=action,
@@ -19,9 +20,14 @@ def record_admin_audit(request, obj, action, form=None, previous_status=None):
 
 
 def get_previous_status(obj, change):
-    if change and obj.pk:
-        return obj.__class__.objects.filter(pk=obj.pk).values_list('status', flat=True).first()
-    return None
+    if not change or not obj.pk:
+        return None
+    field_names = {field.name for field in obj._meta.fields}
+    state_field = 'status' if 'status' in field_names else 'is_active' if 'is_active' in field_names else None
+    if state_field is None:
+        return None
+    value = obj.__class__.objects.filter(pk=obj.pk).values_list(state_field, flat=True).first()
+    return {'field': state_field, 'value': value}
 
 
 @admin.register(AccountProfile)
