@@ -40,7 +40,7 @@ class ProductionSecretKeySettingsTests(SimpleTestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
 
-class SecureCookieSettingsTests(ProductionSecretKeySettingsTests):
+class SecureCookieSettingsTests(SimpleTestCase):
     def test_production_cookie_flags_are_secure(self):
         env = os.environ.copy()
         env["DEBUG"] = "False"
