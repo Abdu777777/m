@@ -123,3 +123,79 @@ class AccountProfile(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     def __str__(self):
         return f'{self.user} - {self.status}'
+
+
+class LedgerAccount(models.Model):
+    class Kind(models.TextChoices):
+        USER = 'user', 'User balance'
+        CLEARING = 'clearing', 'Payment clearing'
+        FEES = 'fees', 'Fees'
+        SYSTEM = 'system', 'System'
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name='ledger_accounts')
+    code = models.CharField(max_length=80, unique=True)
+    kind = models.CharField(max_length=12, choices=Kind.choices)
+    currency = models.CharField(max_length=12, default='USD')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        constraints = [models.CheckConstraint(condition=models.Q(kind='user', owner__isnull=False) | ~models.Q(kind='user'), name='ledger_user_account_requires_owner')]
+    def __str__(self):
+        return f'{self.code} ({self.currency})'
+
+
+class LedgerTransaction(models.Model):
+    class Status(models.TextChoices):
+        POSTED = 'posted', 'Posted'
+        REVERSED = 'reversed', 'Reversed'
+    idempotency_key = models.CharField(max_length=120, unique=True)
+    description = models.CharField(max_length=240)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.POSTED)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+    created_at = models.DateTimeField(auto_now_add=True)
+    def __str__(self):
+        return f'{self.idempotency_key} ({self.status})'
+
+
+class LedgerEntry(models.Model):
+    class Side(models.TextChoices):
+        DEBIT = 'debit', 'Debit'
+        CREDIT = 'credit', 'Credit'
+    transaction = models.ForeignKey(LedgerTransaction, on_delete=models.PROTECT, related_name='entries')
+    account = models.ForeignKey(LedgerAccount, on_delete=models.PROTECT, related_name='entries')
+    side = models.CharField(max_length=6, choices=Side.choices)
+    amount = models.DecimalField(max_digits=20, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
+    currency = models.CharField(max_length=12, default='USD')
+    created_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        constraints = [models.CheckConstraint(condition=models.Q(amount__gt=0), name='ledger_entry_amount_positive')]
+        ordering = ['created_at', 'id']
+    def __str__(self):
+        return f'{self.side} {self.amount} {self.currency}'
+
+
+class MoneyRequest(models.Model):
+    class Kind(models.TextChoices):
+        DEPOSIT = 'deposit', 'Deposit'
+        WITHDRAWAL = 'withdrawal', 'Withdrawal'
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        REVIEW = 'review', 'Under review'
+        APPROVED = 'approved', 'Approved'
+        REJECTED = 'rejected', 'Rejected'
+        PAID = 'paid', 'Paid'
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='money_requests')
+    kind = models.CharField(max_length=12, choices=Kind.choices)
+    amount = models.DecimalField(max_digits=18, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
+    currency = models.CharField(max_length=12, default='USD')
+    payment_method = models.ForeignKey(PaymentMethod, on_delete=models.PROTECT, related_name='money_requests')
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
+    transaction_reference = models.CharField(max_length=180, blank=True)
+    admin_note = models.TextField(blank=True)
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='reviewed_money_requests')
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    class Meta:
+        ordering = ['-created_at']
+    def __str__(self):
+        return f'{self.kind} {self.amount} {self.currency} — {self.status}'
