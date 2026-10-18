@@ -103,4 +103,4 @@ class MoneyRequestAdminSummaryTests(TestCase):
         self.assertContains(response, "review")
         self.assertContains(response, "deposit")
         self.assertContains(response, "withdrawal")
-        self.assertContains(response, "35.00")
+        self.assertEqual(response.context["money_request_currency_totals"][0]["total_amount"], Decimal("35.00"))
