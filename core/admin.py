@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.db import transaction
 from django.utils import timezone
 from .models import AccountProfile, AuditEvent, KYCSubmission, LedgerAccount, LedgerEntry, LedgerTransaction, MoneyRequest, PaymentMethod, PlatformSetting, TradeSignal, PaymentRequest
 
@@ -53,6 +54,7 @@ class MoneyRequestAdmin(admin.ModelAdmin):
     actions = ('mark_selected_for_review', 'reject_selected_requests')
 
     @admin.action(description='Move eligible requests to under review')
+    @transaction.atomic
     def mark_selected_for_review(self, request, queryset):
         changed = 0
         for obj in queryset.select_for_update().filter(status=MoneyRequest.Status.PENDING):
@@ -70,6 +72,7 @@ class MoneyRequestAdmin(admin.ModelAdmin):
         self.message_user(request, f'{changed} request(s) moved to review. No funds were moved.')
 
     @admin.action(description='Reject pending or under-review requests')
+    @transaction.atomic
     def reject_selected_requests(self, request, queryset):
         changed = 0
         eligible = queryset.filter(status__in=(MoneyRequest.Status.PENDING, MoneyRequest.Status.REVIEW))
