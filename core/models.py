@@ -98,6 +98,8 @@ class PaymentRequest(models.Model):
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
     created_at = models.DateTimeField(auto_now_add=True)
     admin_note = models.TextField(blank=True)
+    payment_method = models.ForeignKey('PaymentMethod', null=True, blank=True, on_delete=models.SET_NULL, related_name='payment_requests')
+    payment_method_snapshot = models.CharField(max_length=100, blank=True)
     def __str__(self):
         return f'{self.full_name} — {self.plan} ({self.status})'
 
