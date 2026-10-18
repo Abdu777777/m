@@ -1,23 +1,47 @@
-# AstraTrade — Market Intelligence Platform
+# عرب أوبشن | Arab Option
 
-A bilingual (English/Arabic) Django platform foundation for market research, manually reviewed trade ideas, transparent outcome logs, risk sizing, and membership requests.
+منصة عربية لإدارة أفكار السوق والتحليلات والإيداعات والسحوبات قيد المراجعة، مبنية على Django وPostgreSQL.
 
-## Current implementation
-- Responsive landing page with Arabic/English toggle and RTL support.
-- Django admin for trade ideas and membership/payment requests.
-- Public signal list and outcome-derived metrics (only from records entered by administrators).
-- Position sizing calculator (educational estimate, not instrument-specific broker sizing).
-- `/health/` health endpoint.
-- PostgreSQL via `DATABASE_URL`; SQLite fallback for local development.
-- Railway-ready Docker deployment.
+> **تنبيه:** هذه النسخة أساس تقني تجريبي. لا تنفّذ تداولًا حقيقيًا أو تحويلات مالية تلقائية، ولا ينبغي استخدامها لحفظ أموال الجمهور قبل استكمال المراجعات القانونية والأمنية والتشغيلية.
 
-## Important integrations not yet active
-Live market data, automated signal generation, Telegram delivery, verified USDT settlement, online payment gateway, member authentication/entitlements, and independent performance audit require configuration and testing. The website intentionally labels market charts as illustrative and does not fabricate quotes or performance.
+## التقنية
+- Django 5.1–5.2 وواجهة إدارة Django.
+- PostgreSQL عبر `DATABASE_URL` مع SQLite للتطوير المحلي.
+- Gunicorn وWhiteNoise، وDocker/Railway.
+- نقطة فحص صحة: `/health/`.
 
-## Deploy
-Railway should build from `Dockerfile`. Configure `SECRET_KEY` with a strong random value, `DEBUG=False`, and `DATABASE_URL` from a Railway PostgreSQL service. The startup command runs migrations, collects static assets, then starts Gunicorn. Create the first admin account with a one-off Railway command: `python manage.py createsuperuser`.
+## الموجود في النسخة الحالية
+- صفحة رئيسية متجاوبة بالعربية والإنجليزية مع دعم RTL.
+- إدارة أفكار التداول من لوحة Django Admin، تشمل الذهب والفوركس والعملات الرقمية والمؤشرات.
+- سجل نتائج يستند إلى البيانات التي يسجلها المسؤولون؛ لا يتم اختلاق أسعار مباشرة أو أداء غير متحقق منه.
+- طلبات اشتراك/دفع للمراجعة اليدوية.
+- حاسبة تقديرية لحجم المركز لأغراض تعليمية فقط.
 
-## Local
-`python -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt && python manage.py migrate && python manage.py runserver`
+## غير مفعّل بعد
+- أسعار سوق حية وتوليد إشارات آلي موثوق.
+- حسابات أعضاء مع صلاحيات واشتراكات مدفوعة كاملة.
+- تكامل دفع آلي أو تسوية USDT.
+- دفتر أستاذ مالي متوازن، وحجز سحوبات، وعمليات KYC آمنة.
+- MFA وسجل تدقيق شامل للعمليات الإدارية.
 
-Paid trading research may be regulated. Obtain jurisdiction-specific legal advice before enabling checkout or distributing paid signals. No profit is guaranteed.
+يجب تنفيذ هذه الوحدات واختبارها قبل أي إطلاق مالي فعلي. لا توجد ضمانات أرباح.
+
+## التشغيل محليًا
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py createsuperuser
+python manage.py runserver
+```
+
+## النشر على Railway
+1. اربط هذا المستودع بخدمة Railway.
+2. أضف متغير `SECRET_KEY` عشوائيًا وقويًا، واضبط `DEBUG=False`.
+3. اربط خدمة PostgreSQL واضبط `DATABASE_URL` باستخدام مرجع Railway.
+4. راجع `ALLOWED_HOSTS` و`CSRF_TRUSTED_ORIGINS` بحسب النطاق الفعلي.
+5. أنشئ حساب المدير من خلال أمر آمن `python manage.py createsuperuser` في بيئة الخدمة؛ لا تحفظ كلمات المرور في المستودع أو سجلات البناء.
+
+## الأمن والامتثال
+استخدم أرصدة تجريبية فقط إلى أن تكتمل مراجعة الأمان، وسياسات KYC/AML حسب الاختصاص القانوني، وإجراءات تسوية المدفوعات، واختبارات الاسترداد والنسخ الاحتياطي. يجب أن تمر أي حركة مالية مستقبلية عبر دفتر أستاذ غير قابل للتعديل الصامت، مع سجل تدقيق وصلاحيات أقل امتيازًا.
