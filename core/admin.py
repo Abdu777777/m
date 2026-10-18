@@ -49,14 +49,54 @@ class MoneyRequestAdmin(admin.ModelAdmin):
     list_display = ('user', 'kind', 'amount', 'currency', 'payment_method', 'status', 'created_at', 'reviewed_by')
     list_filter = ('kind', 'status', 'currency', 'payment_method')
     search_fields = ('user__username', 'user__email', 'transaction_reference')
-    readonly_fields = ('created_at', 'updated_at', 'reviewed_at', 'reviewed_by')
-    def save_model(self, request, obj, form, change):
-        previous_status = get_previous_status(obj, change)
-        if obj.status != 'pending':
+    readonly_fields = ('status', 'created_at', 'updated_at', 'reviewed_at', 'reviewed_by')
+    actions = ('mark_selected_for_review', 'reject_selected_requests')
+
+    @admin.action(description='Move eligible requests to under review')
+    def mark_selected_for_review(self, request, queryset):
+        changed = 0
+        for obj in queryset.select_for_update().filter(status=MoneyRequest.Status.PENDING):
+            previous = obj.status
+            obj.status = MoneyRequest.Status.REVIEW
             obj.reviewed_by = request.user
             obj.reviewed_at = timezone.now()
+            obj.save(update_fields=('status', 'reviewed_by', 'reviewed_at', 'updated_at'))
+            AuditEvent.objects.create(
+                actor=request.user, action='money_request_review',
+                object_type='MoneyRequest', object_id=str(obj.pk),
+                details={'previous_state': previous, 'new_state': obj.status, 'kind': obj.kind, 'amount': str(obj.amount), 'currency': obj.currency},
+            )
+            changed += 1
+        self.message_user(request, f'{changed} request(s) moved to review. No funds were moved.')
+
+    @admin.action(description='Reject pending or under-review requests')
+    def reject_selected_requests(self, request, queryset):
+        changed = 0
+        eligible = queryset.filter(status__in=(MoneyRequest.Status.PENDING, MoneyRequest.Status.REVIEW))
+        for obj in eligible.select_for_update():
+            previous = obj.status
+            obj.status = MoneyRequest.Status.REJECTED
+            obj.admin_note = obj.admin_note or 'Rejected by administrator.'
+            obj.reviewed_by = request.user
+            obj.reviewed_at = timezone.now()
+            obj.save(update_fields=('status', 'admin_note', 'reviewed_by', 'reviewed_at', 'updated_at'))
+            AuditEvent.objects.create(
+                actor=request.user, action='money_request_rejected',
+                object_type='MoneyRequest', object_id=str(obj.pk),
+                details={'previous_state': previous, 'new_state': obj.status, 'kind': obj.kind, 'amount': str(obj.amount), 'currency': obj.currency},
+            )
+            changed += 1
+        self.message_user(request, f'{changed} request(s) rejected. No funds were moved.')
+
+    def save_model(self, request, obj, form, change):
+        previous_status = get_previous_status(obj, change)
+        if change:
+            original = MoneyRequest.objects.get(pk=obj.pk)
+            obj.status = original.status
+            obj.reviewed_by = original.reviewed_by
+            obj.reviewed_at = original.reviewed_at
         super().save_model(request, obj, form, change)
-        record_admin_audit(request, obj, 'money_request_review', form, previous_status)
+        record_admin_audit(request, obj, 'money_request_details_update', form, previous_status)
 
 
 @admin.register(LedgerAccount)
