@@ -1,19 +1,24 @@
-{% extends "admin/base_site.html" %}
-{% load i18n %}
-
-{% block content %}
-  <h1>Record verified external settlement</h1>
-  <p><strong>Request:</strong> #{{ original.pk }} — {{ original.get_kind_display }}</p>
-  <p><strong>Customer:</strong> {{ original.user }}</p>
-  <p><strong>Amount:</strong> {{ original.amount }} {{ original.currency }}</p>
-  <p><strong>Current status:</strong> {{ original.get_status_display }}</p>
-  <p>Use this form only after independently verifying the external payment or transfer. This records an internal ledger entry; it does not send or receive funds.</p>
-  <form method="post" novalidate>
-    {% csrf_token %}
-    {{ form.as_p }}
-    <div class="submit-row">
-      <input type="submit" value="Record verified settlement" class="default">
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Record verified settlement</title>
+</head>
+<body>
+  <main>
+    <h1>Record verified external settlement</h1>
+    <p><strong>Request:</strong> #{{ original.pk }} — {{ original.get_kind_display }}</p>
+    <p><strong>Customer:</strong> {{ original.user }}</p>
+    <p><strong>Amount:</strong> {{ original.amount }} {{ original.currency }}</p>
+    <p><strong>Current status:</strong> {{ original.get_status_display }}</p>
+    <p>Use this form only after independently verifying the external payment or transfer. This records an internal ledger entry; it does not send or receive funds.</p>
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {{ form.as_p }}
+      <button type="submit">Record verified settlement</button>
       <a href="{{ back_url }}">Cancel</a>
-    </div>
-  </form>
-{% endblock %}
+    </form>
+  </main>
+</body>
+</html>
