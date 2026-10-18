@@ -75,8 +75,15 @@ def settle_money_request(*, request_id, actor, evidence_reference, confirm_recei
         raise MoneyRequestWorkflowError("The request already has a different transaction reference.")
 
     user_account, clearing_account = _ledger_accounts(request)
-    # Lock the customer account before checking the balance to serialize withdrawals.
-    user_account = LedgerAccount.objects.select_for_update().get(pk=user_account.pk)
+    # Acquire all ledger account locks in primary-key order, matching post_ledger_transaction.
+    locked_accounts = {
+        account.pk: account
+        for account in LedgerAccount.objects.select_for_update()
+        .filter(pk__in=(user_account.pk, clearing_account.pk))
+        .order_by('pk')
+    }
+    user_account = locked_accounts[user_account.pk]
+    clearing_account = locked_accounts[clearing_account.pk]
     if request.kind == MoneyRequest.Kind.WITHDRAWAL and account_balance(user_account) < request.amount:
         raise MoneyRequestWorkflowError("Insufficient ledger balance for this withdrawal.")
 
