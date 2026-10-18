@@ -2,7 +2,7 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from .ledger import LedgerValidationError, account_balance, post_ledger_transaction
-from .models import LedgerAccount, LedgerEntry
+from .models import AuditEvent, LedgerAccount, LedgerEntry
 
 
 class DoubleEntryLedgerTests(TestCase):
@@ -23,6 +23,9 @@ class DoubleEntryLedgerTests(TestCase):
         )
         self.assertEqual(record.entries.count(), 2)
         self.assertEqual(account_balance(self.customer), Decimal('12.50'))
+        audit = AuditEvent.objects.get(action='ledger_transaction_posted', object_id=str(record.pk))
+        self.assertEqual(audit.details['entry_count'], 2)
+        self.assertEqual(audit.details['debit_total'], '12.50')
 
     def test_unbalanced_transaction_is_rejected(self):
         with self.assertRaises(LedgerValidationError):
@@ -64,3 +67,15 @@ class DoubleEntryLedgerTests(TestCase):
                     {'account_id': self.customer.id, 'side': 'credit', 'amount': '6.00'},
                 ],
             )
+
+    def test_non_finite_amount_is_rejected(self):
+        with self.assertRaises(LedgerValidationError):
+            post_ledger_transaction(
+                idempotency_key='test-nan-001',
+                description='Invalid non-finite amount',
+                entries=[
+                    {'account_id': self.clearing.id, 'side': 'debit', 'amount': 'NaN'},
+                    {'account_id': self.customer.id, 'side': 'credit', 'amount': 'NaN'},
+                ],
+            )
+        self.assertEqual(LedgerEntry.objects.count(), 0)
