@@ -3,7 +3,7 @@ from django.contrib.admin.sites import AdminSite
 from django.contrib.auth import get_user_model
 from types import SimpleNamespace
 from .admin import MoneyRequestAdmin
-from .models import AuditEvent, MoneyRequest
+from .models import AuditEvent, LedgerEntry, MoneyRequest
 from django.urls import reverse
 from .models import PaymentMethod, PaymentRequest, TradeSignal
 
@@ -94,6 +94,23 @@ class MoneyRequestAdminWorkflowTests(TestCase):
         event = AuditEvent.objects.get(object_type='MoneyRequest', object_id=str(pending.pk), action='money_request_review')
         self.assertEqual(event.details['previous_state'], MoneyRequest.Status.PENDING)
         self.assertEqual(event.details['new_state'], MoneyRequest.Status.REVIEW)
+
+    def test_approve_action_only_approves_withdrawals_under_review(self):
+        eligible = self.make_request(kind=MoneyRequest.Kind.WITHDRAWAL, status=MoneyRequest.Status.REVIEW)
+        deposit = self.make_request(kind=MoneyRequest.Kind.DEPOSIT, status=MoneyRequest.Status.REVIEW)
+        request = self.factory.post('/admin/core/moneyrequest/')
+        request.user = self.admin_user
+        self.model_admin.approve_selected_withdrawals(
+            request, MoneyRequest.objects.filter(pk__in=[eligible.pk, deposit.pk])
+        )
+        eligible.refresh_from_db()
+        deposit.refresh_from_db()
+        self.assertEqual(eligible.status, MoneyRequest.Status.APPROVED)
+        self.assertEqual(deposit.status, MoneyRequest.Status.REVIEW)
+        self.assertTrue(AuditEvent.objects.filter(
+            object_type='MoneyRequest', object_id=str(eligible.pk), action='money_withdrawal_approved'
+        ).exists())
+        self.assertEqual(LedgerEntry.objects.count(), 0)
 
     def test_reject_action_does_not_reject_already_paid_request(self):
         pending = self.make_request()
