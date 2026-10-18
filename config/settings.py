@@ -38,6 +38,9 @@ USE_I18N = True
 USE_TZ = True
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR/'staticfiles'
+# User-uploaded identity documents must stay outside static/public directories.
+# In Railway, mount a persistent volume at /data and set MEDIA_ROOT=/data/private-media.
+MEDIA_ROOT = Path(os.environ.get('MEDIA_ROOT', str(BASE_DIR / 'private-media')))
 STORAGES = {'default': {'BACKEND':'django.core.files.storage.FileSystemStorage'}, 'staticfiles': {'BACKEND':'whitenoise.storage.CompressedManifestStaticFilesStorage'}}
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
