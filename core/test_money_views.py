@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from .models import AccountProfile, AuditEvent, MoneyRequest, PaymentMethod
@@ -70,6 +70,10 @@ class CustomerMoneyRequestViewTests(TestCase):
 
 
 
+@override_settings(STORAGES={
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+})
 class MoneyRequestAdminSummaryTests(TestCase):
     def setUp(self):
         User = get_user_model()
