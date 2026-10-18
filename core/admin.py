@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.utils import timezone
-from .models import AccountProfile, AuditEvent, LedgerAccount, LedgerEntry, LedgerTransaction, MoneyRequest, PaymentMethod, PlatformSetting, TradeSignal, PaymentRequest
+from .models import AccountProfile, AuditEvent, KYCSubmission, LedgerAccount, LedgerEntry, LedgerTransaction, MoneyRequest, PaymentMethod, PlatformSetting, TradeSignal, PaymentRequest
 
 
 @admin.register(AccountProfile)
@@ -98,3 +98,24 @@ class PaymentRequestAdmin(admin.ModelAdmin):
     search_fields = ('full_name','email','transaction_reference')
     list_editable = ('status',)
     readonly_fields = ('created_at',)
+
+
+@admin.register(KYCSubmission)
+class KYCSubmissionAdmin(admin.ModelAdmin):
+    list_display = ('user', 'document_type', 'status', 'created_at', 'reviewed_by', 'reviewed_at')
+    list_filter = ('status', 'document_type')
+    search_fields = ('user__username', 'user__email')
+    readonly_fields = ('user', 'document_type', 'document_file', 'applicant_note', 'created_at', 'updated_at', 'reviewed_by', 'reviewed_at')
+    fields = ('user', 'document_type', 'document_file', 'applicant_note', 'status', 'reviewer_note', 'created_at', 'updated_at', 'reviewed_by', 'reviewed_at')
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_superuser or request.user.has_perm('core.review_kycsubmission')
+    def has_add_permission(self, request):
+        return False
+    def has_delete_permission(self, request, obj=None):
+        return False
+    def save_model(self, request, obj, form, change):
+        if obj.status in ('approved', 'rejected'):
+            obj.reviewed_by = request.user
+            from django.utils import timezone
+            obj.reviewed_at = timezone.now()
+        super().save_model(request, obj, form, change)

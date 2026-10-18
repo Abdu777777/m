@@ -199,3 +199,46 @@ class MoneyRequest(models.Model):
         ordering = ['-created_at']
     def __str__(self):
         return f'{self.kind} {self.amount} {self.currency} — {self.status}'
+
+
+def validate_kyc_document(value):
+    import os
+    from django.conf import settings
+    from django.core.exceptions import ValidationError
+    if value.size > getattr(settings, 'KYC_MAX_UPLOAD_BYTES', 5 * 1024 * 1024):
+        raise ValidationError('File exceeds the 5 MB limit.')
+    if os.path.splitext(value.name)[1].lower() not in {'.jpg', '.jpeg', '.png', '.pdf'}:
+        raise ValidationError('Only JPG, PNG and PDF files are accepted.')
+
+
+def kyc_private_upload_path(instance, filename):
+    import uuid
+    from pathlib import Path
+    return f'private-kyc/{instance.user_id}/{uuid.uuid4().hex}{Path(filename).suffix.lower()}'
+
+
+class KYCSubmission(models.Model):
+    class DocumentType(models.TextChoices):
+        NATIONAL_ID = 'national_id', 'National ID'
+        PASSPORT = 'passport', 'Passport'
+        RESIDENCE = 'residence', 'Residence permit'
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Pending review'
+        REVIEW = 'review', 'Under review'
+        APPROVED = 'approved', 'Approved'
+        REJECTED = 'rejected', 'Rejected'
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='kyc_submissions')
+    document_type = models.CharField(max_length=20, choices=DocumentType.choices)
+    document_file = models.FileField(upload_to=kyc_private_upload_path, validators=[validate_kyc_document])
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
+    applicant_note = models.CharField(max_length=500, blank=True)
+    reviewer_note = models.CharField(max_length=500, blank=True)
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='reviewed_kyc_submissions')
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    class Meta:
+        ordering = ['-created_at']
+        permissions = [('review_kycsubmission', 'Can review KYC submissions')]
+    def __str__(self):
+        return f'KYC {self.user} - {self.status}'
