@@ -84,7 +84,7 @@ class PlatformSettingAdmin(admin.ModelAdmin):
 
 @admin.register(TradeSignal)
 class TradeSignalAdmin(admin.ModelAdmin):
-    list_display = ('symbol','market','direction','entry','stop_loss','target_1','status','result_r','is_published','published_at')
+    list_display = ('symbol','market','direction','entry','stop_loss','target_1','status','review_status','result_r','is_published','published_at')
     list_filter = ('market','direction','status','review_status','is_published')
     search_fields = ('symbol','title','analysis','source_name')
     list_editable = ('status','review_status','is_published')
