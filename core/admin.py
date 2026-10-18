@@ -200,6 +200,23 @@ class MoneyRequestAdmin(admin.ModelAdmin):
         super().save_model(request, obj, form, change)
         record_admin_audit(request, obj, 'money_request_details_update', form, previous_status)
 
+    def changelist_view(self, request, extra_context=None):
+        from django.db.models import Count, Sum
+        response_context = dict(extra_context or {})
+        base = MoneyRequest.objects.all()
+        response_context["money_request_status_summary"] = list(
+            base.values("status").annotate(count=Count("id")).order_by("status")
+        )
+        response_context["money_request_kind_summary"] = list(
+            base.values("kind").annotate(count=Count("id")).order_by("kind")
+        )
+        response_context["money_request_currency_totals"] = list(
+            base.values("currency").annotate(
+                request_count=Count("id"), total_amount=Sum("amount")
+            ).order_by("currency")
+        )
+        return super().changelist_view(request, extra_context=response_context)
+
 
 @admin.register(LedgerAccount)
 class LedgerAccountAdmin(admin.ModelAdmin):
