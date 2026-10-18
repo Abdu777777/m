@@ -1,4 +1,7 @@
 from django.contrib import messages
+from django.contrib.auth import login
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.forms import UserCreationForm
 from django.shortcuts import render, redirect
 from django.views.decorators.http import require_http_methods
 from django.core.validators import validate_email
@@ -22,6 +25,26 @@ def home(request):
         'payment_methods': PaymentMethod.objects.filter(is_active=True, accepts_deposits=True),
     }
     return render(request, 'core/home.html', context)
+
+
+def register(request):
+    if request.user.is_authenticated:
+        return redirect('account_dashboard')
+    if request.method == 'POST':
+        form = UserCreationForm(request.POST)
+        if form.is_valid():
+            user = form.save()
+            login(request, user)
+            return redirect('account_dashboard')
+        messages.error(request, 'يرجى مراجعة البيانات وكلمة المرور.')
+    else:
+        form = UserCreationForm()
+    return render(request, 'core/register.html', {'form': form})
+
+
+@login_required
+def account_dashboard(request):
+    return render(request, 'core/dashboard.html')
 
 
 @require_http_methods(['POST'])
