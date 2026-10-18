@@ -100,3 +100,24 @@ class PaymentRequest(models.Model):
     admin_note = models.TextField(blank=True)
     def __str__(self):
         return f'{self.full_name} — {self.plan} ({self.status})'
+
+
+class AccountProfile(models.Model):
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Pending review'
+        ACTIVE = 'active', 'Active'
+        RESTRICTED = 'restricted', 'Restricted'
+        SUSPENDED = 'suspended', 'Suspended'
+        CLOSED = 'closed', 'Closed'
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='account_profile')
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
+    can_login = models.BooleanField(default=True)
+    can_trade = models.BooleanField(default=False)
+    can_withdraw = models.BooleanField(default=False)
+    kyc_required = models.BooleanField(default=True)
+    restriction_reason = models.CharField(max_length=240, blank=True)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='account_profiles_updated')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    def __str__(self):
+        return f'{self.user} - {self.status}'
