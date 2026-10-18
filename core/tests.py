@@ -77,6 +77,36 @@ class MoneyRequestAdminWorkflowTests(TestCase):
             payment_method=self.method, status=status,
         )
 
+    def test_admin_settlement_page_records_verified_deposit(self):
+        from django.urls import reverse
+        from .ledger import account_balance
+        request_obj = self.make_request(kind=MoneyRequest.Kind.DEPOSIT, status=MoneyRequest.Status.REVIEW)
+        self.client.force_login(self.admin_user)
+        url = reverse('admin:core_moneyrequest_settle', args=(request_obj.pk,))
+        response = self.client.post(url, {
+            'evidence_reference': 'admin-ui-deposit-001',
+            'confirm_external_settlement': 'on',
+        })
+        self.assertEqual(response.status_code, 302)
+        request_obj.refresh_from_db()
+        self.assertEqual(request_obj.status, MoneyRequest.Status.APPROVED)
+        account = LedgerEntry.objects.get(transaction__idempotency_key=f'money-request-{request_obj.pk}-deposit').account
+        self.assertEqual(account_balance(account), request_obj.amount)
+        self.assertTrue(AuditEvent.objects.filter(
+            action='money_request_settled', object_id=str(request_obj.pk)
+        ).exists())
+
+    def test_admin_settlement_page_rejects_missing_confirmation(self):
+        from django.urls import reverse
+        request_obj = self.make_request(kind=MoneyRequest.Kind.DEPOSIT, status=MoneyRequest.Status.REVIEW)
+        self.client.force_login(self.admin_user)
+        url = reverse('admin:core_moneyrequest_settle', args=(request_obj.pk,))
+        response = self.client.post(url, {'evidence_reference': 'unconfirmed-tx'})
+        self.assertEqual(response.status_code, 200)
+        request_obj.refresh_from_db()
+        self.assertEqual(request_obj.status, MoneyRequest.Status.REVIEW)
+        self.assertEqual(LedgerEntry.objects.count(), 0)
+
     def test_status_is_not_directly_editable_in_admin(self):
         self.assertIn('status', self.model_admin.readonly_fields)
         self.assertNotIn('status', self.model_admin.list_editable)
