@@ -53,6 +53,12 @@ class MoneyRequestAdmin(admin.ModelAdmin):
     readonly_fields = ('status', 'created_at', 'updated_at', 'reviewed_at', 'reviewed_by')
     actions = ('mark_selected_for_review', 'reject_selected_requests')
 
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
     @admin.action(description='Move eligible requests to under review')
     @transaction.atomic
     def mark_selected_for_review(self, request, queryset):
