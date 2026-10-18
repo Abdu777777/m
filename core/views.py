@@ -56,17 +56,16 @@ def request_subscription(request):
     full_name = request.POST.get('full_name','').strip()[:120]
     email = request.POST.get('email','').strip()[:254]
     plan = request.POST.get('plan','signals')
-    method = request.POST.get('method','usdt')
+    method_id = request.POST.get('payment_method_id', '').strip()
+    payment_method = PaymentMethod.objects.filter(pk=method_id, is_active=True, accepts_deposits=True).first() if method_id.isdigit() else None
     try:
         validate_email(email)
     except ValidationError:
         email = ''
-    if not full_name or not email or plan not in ['signals','pro'] or method not in ['usdt','gateway']:
+    if not full_name or not email or plan not in ['signals','pro'] or not payment_method:
         messages.error(request, 'يرجى إدخال البيانات المطلوبة بصورة صحيحة.')
         return redirect('/#pricing')
-    PaymentRequest.objects.create(full_name=full_name, email=email, plan=plan, method=method)
-    if method == 'gateway':
-        messages.success(request, 'تم حفظ طلبك. الدفع الإلكتروني غير مربوط حاليًا وسيتم التواصل معك بعد المراجعة.')
-    else:
-        messages.success(request, 'تم حفظ طلبك. لا ترسل USDT قبل استلام تعليمات موثوقة والتحقق من عنوان الاستلام.')
+    legacy_method = 'usdt' if payment_method.kind == 'crypto' else 'gateway'
+    PaymentRequest.objects.create(full_name=full_name, email=email, plan=plan, method=legacy_method, payment_method=payment_method, payment_method_snapshot=payment_method.name)
+    messages.success(request, 'تم حفظ طلبك لمراجعة الإدارة عبر الوسيلة المحددة. لا ترسل أموالًا قبل تأكيد تعليمات الدفع الرسمية.')
     return redirect('/#pricing')
