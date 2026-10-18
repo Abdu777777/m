@@ -67,3 +67,36 @@ class CustomerMoneyRequestViewTests(TestCase):
         self.submit(payment_method_id=str(method.pk), amount="250.00")
         item = MoneyRequest.objects.get(user=self.user)
         self.assertEqual(item.currency, "YER")
+
+
+
+class MoneyRequestAdminSummaryTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username="summary-customer", password="test-only-password")
+        self.admin_user = User.objects.create_superuser(
+            username="summary-admin", email="summary-admin@example.com", password="test-only-password"
+        )
+        self.method = PaymentMethod.objects.create(
+            name="Summary wallet", kind=PaymentMethod.Kind.LOCAL, currency="USD",
+            is_active=True, minimum_amount=Decimal("5.00"), maximum_amount=Decimal("500.00"),
+        )
+        MoneyRequest.objects.create(
+            user=self.user, kind=MoneyRequest.Kind.DEPOSIT, amount=Decimal("25.00"),
+            currency="USD", payment_method=self.method, status=MoneyRequest.Status.PENDING,
+        )
+        MoneyRequest.objects.create(
+            user=self.user, kind=MoneyRequest.Kind.WITHDRAWAL, amount=Decimal("10.00"),
+            currency="USD", payment_method=self.method, status=MoneyRequest.Status.REVIEW,
+        )
+
+    def test_admin_changelist_displays_status_kind_and_currency_summary(self):
+        self.client.force_login(self.admin_user)
+        response = self.client.get("/admin/core/moneyrequest/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "ملخص الطلبات المالية")
+        self.assertContains(response, "pending")
+        self.assertContains(response, "review")
+        self.assertContains(response, "deposit")
+        self.assertContains(response, "withdrawal")
+        self.assertContains(response, "35.00")
