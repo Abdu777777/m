@@ -8,7 +8,7 @@ from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django_ratelimit.decorators import ratelimit
-from .models import TradeSignal, PaymentRequest, PaymentMethod
+from .models import TradeSignal, PaymentRequest, PaymentMethod, AccountProfile, KYCSubmission
 
 
 def home(request):
@@ -34,6 +34,7 @@ def register(request):
         form = UserCreationForm(request.POST)
         if form.is_valid():
             user = form.save()
+            AccountProfile.objects.get_or_create(user=user)
             login(request, user)
             return redirect('account_dashboard')
         messages.error(request, 'يرجى مراجعة البيانات وكلمة المرور.')
@@ -69,3 +70,23 @@ def request_subscription(request):
     PaymentRequest.objects.create(full_name=full_name, email=email, plan=plan, method=legacy_method, payment_method=payment_method, payment_method_snapshot=payment_method.name)
     messages.success(request, 'تم حفظ طلبك لمراجعة الإدارة عبر الوسيلة المحددة. لا ترسل أموالًا قبل تأكيد تعليمات الدفع الرسمية.')
     return redirect('/#pricing')
+
+
+@login_required
+@require_http_methods(['GET', 'POST'])
+def kyc_submit(request):
+    AccountProfile.objects.get_or_create(user=request.user)
+    if request.method == 'POST':
+        uploaded = request.FILES.get('document_file')
+        if uploaded:
+            submission = KYCSubmission(user=request.user, document_type=request.POST.get('document_type', ''), document_file=uploaded, applicant_note=request.POST.get('applicant_note', '').strip()[:500])
+            try:
+                submission.full_clean()
+                submission.save()
+                messages.success(request, 'تم استلام طلب التحقق للمراجعة.')
+            except ValidationError as exc:
+                messages.error(request, 'تعذر قبول المستند: ' + ' '.join(str(x) for x in exc.messages))
+        else:
+            messages.error(request, 'يرجى اختيار ملف المستند.')
+    submissions = KYCSubmission.objects.filter(user=request.user).order_by('-created_at')
+    return render(request, 'core/kyc.html', {'submissions': submissions})
