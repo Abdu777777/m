@@ -44,6 +44,16 @@ class AccountProfileAdmin(admin.ModelAdmin):
     search_fields = ('user__username', 'user__email', 'restriction_reason')
     readonly_fields = ('created_at', 'updated_at', 'updated_by')
     fieldsets = (('Account', {'fields': ('user', 'status')}), ('Permissions', {'fields': ('can_login', 'can_trade', 'can_withdraw', 'kyc_required')}), ('Restriction details', {'fields': ('restriction_reason',)}), ('Audit', {'fields': ('created_at', 'updated_at', 'updated_by')}))
+
+    def get_readonly_fields(self, request, obj=None):
+        fields = list(super().get_readonly_fields(request, obj))
+        if not request.user.is_superuser:
+            fields.extend(('user', 'status', 'can_login', 'can_trade', 'can_withdraw', 'kyc_required'))
+        return tuple(dict.fromkeys(fields))
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser and super().has_delete_permission(request, obj)
+
     def save_model(self, request, obj, form, change):
         previous_status = get_previous_status(obj, change)
         obj.updated_by = request.user
