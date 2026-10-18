@@ -265,3 +265,44 @@ class KYCSubmission(models.Model):
         permissions = [('review_kycsubmission', 'Can review KYC submissions')]
     def __str__(self):
         return f'KYC {self.user} - {self.status}'
+
+
+class SupportTicket(models.Model):
+    class Status(models.TextChoices):
+        OPEN = 'open', 'Open'
+        IN_PROGRESS = 'in_progress', 'In progress'
+        WAITING = 'waiting', 'Waiting for user'
+        RESOLVED = 'resolved', 'Resolved'
+        CLOSED = 'closed', 'Closed'
+    class Priority(models.TextChoices):
+        LOW = 'low', 'Low'
+        NORMAL = 'normal', 'Normal'
+        HIGH = 'high', 'High'
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='support_tickets')
+    subject = models.CharField(max_length=160)
+    message = models.TextField(max_length=5000)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.OPEN)
+    priority = models.CharField(max_length=10, choices=Priority.choices, default=Priority.NORMAL)
+    staff_note = models.TextField(blank=True, max_length=3000)
+    assigned_to = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='assigned_support_tickets')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    class Meta:
+        ordering = ['-updated_at']
+    def __str__(self):
+        return f'#{self.pk} {self.subject}'
+
+
+class UserNotification(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='platform_notifications')
+    title = models.CharField(max_length=160)
+    message = models.CharField(max_length=1000)
+    category = models.CharField(max_length=32, default='general')
+    target_url = models.CharField(max_length=300, blank=True)
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+    class Meta:
+        ordering = ['-created_at']
+    def __str__(self):
+        return f'{self.user}: {self.title}'
