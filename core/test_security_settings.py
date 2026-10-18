@@ -40,13 +40,22 @@ class ProductionSecretKeySettingsTests(SimpleTestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
 
-class SecureCookieSettingsTests(SimpleTestCase):
+class SecureCookieSettingsTests(ProductionSecretKeySettingsTests):
     def test_production_cookie_flags_are_secure(self):
-        from django.conf import settings
-
-        self.assertTrue(settings.SESSION_COOKIE_SECURE)
-        self.assertTrue(settings.CSRF_COOKIE_SECURE)
-        self.assertTrue(settings.SESSION_COOKIE_HTTPONLY)
-        self.assertEqual(settings.SESSION_COOKIE_SAMESITE, "Lax")
-        self.assertEqual(settings.CSRF_COOKIE_SAMESITE, "Lax")
-        self.assertEqual(settings.X_FRAME_OPTIONS, "DENY")
+        env = os.environ.copy()
+        env["DEBUG"] = "False"
+        env["SECRET_KEY"] = "x" * 64
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import config.settings as s; print('|'.join(str(v) for v in (s.SESSION_COOKIE_SECURE, s.CSRF_COOKIE_SECURE, s.SESSION_COOKIE_HTTPONLY, s.SESSION_COOKIE_SAMESITE, s.CSRF_COOKIE_SAMESITE, s.X_FRAME_OPTIONS)))",
+            ],
+            cwd=PROJECT_ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), "True|True|True|Lax|Lax|DENY")
