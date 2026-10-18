@@ -51,7 +51,7 @@ class MoneyRequestAdmin(admin.ModelAdmin):
     list_filter = ('kind', 'status', 'currency', 'payment_method')
     search_fields = ('user__username', 'user__email', 'transaction_reference')
     readonly_fields = ('status', 'created_at', 'updated_at', 'reviewed_at', 'reviewed_by')
-    actions = ('mark_selected_for_review', 'reject_selected_requests')
+    actions = ('mark_selected_for_review', 'approve_selected_withdrawals', 'reject_selected_requests')
 
     def has_add_permission(self, request):
         return False
@@ -76,6 +76,25 @@ class MoneyRequestAdmin(admin.ModelAdmin):
             )
             changed += 1
         self.message_user(request, f'{changed} request(s) moved to review. No funds were moved.')
+
+    @admin.action(description='Approve reviewed withdrawal requests (does not send funds)')
+    @transaction.atomic
+    def approve_selected_withdrawals(self, request, queryset):
+        changed = 0
+        eligible = queryset.filter(kind=MoneyRequest.Kind.WITHDRAWAL, status=MoneyRequest.Status.REVIEW)
+        for obj in eligible.select_for_update():
+            previous = obj.status
+            obj.status = MoneyRequest.Status.APPROVED
+            obj.reviewed_by = request.user
+            obj.reviewed_at = timezone.now()
+            obj.save(update_fields=('status', 'reviewed_by', 'reviewed_at', 'updated_at'))
+            AuditEvent.objects.create(
+                actor=request.user, action='money_withdrawal_approved',
+                object_type='MoneyRequest', object_id=str(obj.pk),
+                details={'previous_state': previous, 'new_state': obj.status, 'kind': obj.kind, 'amount': str(obj.amount), 'currency': obj.currency},
+            )
+            changed += 1
+        self.message_user(request, f'{changed} withdrawal request(s) approved. No funds were sent.')
 
     @admin.action(description='Reject pending or under-review requests')
     @transaction.atomic
